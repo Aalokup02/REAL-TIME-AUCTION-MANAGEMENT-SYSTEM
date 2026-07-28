@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Authentication page: lets a buyer or seller register and sign in. -->
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BidHive – Sign In / Sign Up</title>
+<link rel="stylesheet" href="shared.css"/>
+<style>
+  body { display:flex; align-items:flex-start; justify-content:center; padding:2rem 1rem; overflow-y:auto; }
+  .page { display:none; width:100%; max-width:420px; position:relative; z-index:1; animation:fadeUp 0.3s ease; }
+  .page.active { display:block; }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+
+  .logo { display:flex; align-items:center; gap:10px; margin-bottom:1.5rem; text-decoration:none; }
+  .logo-mark { width:38px;height:38px;background:var(--accent);border-radius:10px;display:flex;align-items:center;justify-content:center; }
+  .logo-mark svg { width:20px;height:20px;fill:#0d0f14; }
+  .logo-name { font-family:var(--font-display);font-size:22px;color:var(--text); }
+  .logo-name span { color:var(--accent); }
+
+  .card { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.75rem; }
+  .card-title { font-family:var(--font-display);font-size:23px;color:var(--text);margin-bottom:3px; }
+  .card-sub { font-size:13px;color:var(--text-muted);margin-bottom:1.25rem;line-height:1.5; }
+
+  .pass-wrap { position:relative; }
+  .pass-wrap .form-input { padding-right:44px; }
+  .eye-btn { position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:var(--text-dim);display:flex;transition:color 0.15s; }
+  .eye-btn:hover { color:var(--text-muted); }
+
+  .role-grid { display:grid;grid-template-columns:1fr 1fr;gap:10px; }
+  .role-card { background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 10px 10px;cursor:pointer;text-align:center;transition:border-color 0.2s,background 0.2s; }
+  .role-card:hover { border-color:rgba(245,166,35,0.4); }
+  .role-card.selected { border-color:var(--accent);background:var(--accent-dim);box-shadow:0 0 0 3px rgba(245,166,35,0.1); }
+  .role-icon { font-size:20px;display:block;margin-bottom:5px; }
+  .role-label { font-size:13px;font-weight:600;color:var(--text); }
+  .role-desc { font-size:11px;color:var(--text-muted);margin-top:2px; }
+
+  .btn-submit { width:100%;height:44px;margin-top:0.25rem;background:var(--accent);border:none;border-radius:var(--radius-sm);color:#0d0f14;font-family:var(--font-body);font-size:14px;font-weight:600;cursor:pointer;transition:background 0.15s,transform 0.1s; }
+  .btn-submit:hover { background:var(--accent-hover); }
+  .btn-submit:active { transform:scale(0.98); }
+  .btn-submit:disabled { opacity:0.6;cursor:not-allowed;transform:none; }
+
+  .divider { display:flex;align-items:center;gap:10px;margin:1.25rem 0 1rem;color:var(--text-dim);font-size:12px; }
+  .divider::before,.divider::after { content:'';flex:1;height:1px;background:var(--border); }
+
+  .switch-text { font-size:13px;color:var(--text-muted);text-align:center; }
+  .link-btn { background:none;border:none;color:var(--accent);font-family:var(--font-body);font-size:13px;font-weight:600;cursor:pointer;padding:0;transition:color 0.15s; }
+  .link-btn:hover { color:var(--accent-hover);text-decoration:underline; }
+  .forgot { text-align:right;margin-top:-6px;margin-bottom:12px; }
+  .forgot .link-btn { font-size:12px;color:var(--text-dim); }
+  .forgot .link-btn:hover { color:var(--text-muted); }
+
+  .strength-bar { display:flex;gap:4px;margin-top:6px; }
+  .strength-seg { height:3px;flex:1;background:var(--surface2);border-radius:2px;transition:background 0.3s; }
+  .s1{background:#e05a5a} .s2{background:#e07a30} .s3{background:#c8b420} .s4{background:#4caf82}
+</style>
+</head>
+<body>
+<div class="bg-glow"></div>
+
+<!-- LOGIN -->
+<div id="login-page" class="page active">
+  <a href="index.html" class="logo">
+    <div class="logo-mark"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
+    <span class="logo-name">Bid<span>Hive</span></span>
+  </a>
+  <div class="card">
+    <p class="card-title">Welcome back</p>
+    <p class="card-sub">Sign in to continue placing bids and managing listings.</p>
+    <div class="form-field">
+      <label class="form-label">Email address</label>
+      <input type="email" id="login-email" class="form-input" placeholder="you@example.com" autocomplete="email"/>
+    </div>
+    <div class="form-field">
+      <label class="form-label">Password</label>
+      <div class="pass-wrap">
+        <input type="password" id="login-pass" class="form-input" placeholder="••••••••" autocomplete="current-password"/>
+        <button class="eye-btn" onclick="togglePass('login-pass')" tabindex="-1">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+    </div>
+    <button class="btn-submit" id="login-btn" onclick="handleLogin()">Sign in to BidHive</button>
+    <div class="divider">or</div>
+    <p class="switch-text">New user? <button class="link-btn" onclick="show('signup-page')">Sign Up</button></p>
+  </div>
+</div>
+
+<!-- SIGNUP -->
+<div id="signup-page" class="page">
+  <a href="index.html" class="logo">
+    <div class="logo-mark"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
+    <span class="logo-name">Bid<span>Hive</span></span>
+  </a>
+  <div class="card">
+    <p class="card-title">Create account</p>
+    <p class="card-sub">Join BidHive — bid on rare finds or list your items for auction.</p>
+    <div class="form-field">
+      <label class="form-label">Full name</label>
+      <input type="text" id="su-name" class="form-input" placeholder="Jane Smith" autocomplete="name"/>
+    </div>
+    <div class="form-field">
+      <label class="form-label">Email address</label>
+      <input type="email" id="su-email" class="form-input" placeholder="you@example.com" autocomplete="email"/>
+    </div>
+    <div class="form-field">
+      <label class="form-label">Password</label>
+      <div class="pass-wrap">
+        <input type="password" id="su-pass" class="form-input" placeholder="At least 8 characters" autocomplete="new-password" oninput="checkStrength(this.value)"/>
+        <button class="eye-btn" onclick="togglePass('su-pass')" tabindex="-1">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+      <div class="strength-bar">
+        <div class="strength-seg" id="seg1"></div><div class="strength-seg" id="seg2"></div>
+        <div class="strength-seg" id="seg3"></div><div class="strength-seg" id="seg4"></div>
+      </div>
+    </div>
+    <div class="form-field">
+      <label class="form-label">I want to</label>
+      <div class="role-grid">
+        <div class="role-card" id="role-buyer" onclick="selectRole('buyer')">
+          <span class="role-icon">🛒</span>
+          <div class="role-label">Buyer</div>
+          <div class="role-desc">Browse &amp; bid on items</div>
+        </div>
+        <div class="role-card" id="role-seller" onclick="selectRole('seller')">
+          <span class="role-icon">🏷️</span>
+          <div class="role-label">Seller</div>
+          <div class="role-desc">List &amp; auction items</div>
+        </div>
+      </div>
+      <input type="hidden" id="su-role" value=""/>
+    </div>
+    <button class="btn-submit" id="signup-btn" onclick="handleSignup()">Create my account</button>
+    <div class="divider">or</div>
+    <p class="switch-text">Already have an account? <button class="link-btn" onclick="show('login-page')">Sign in</button></p>
+  </div>
+</div>
+
+<script src="shared.js"></script>
+<script>
+  // Redirect if already logged in
+  if (getToken()) window.location.href = "index.html";
+
+  // Show signup if hash present
+  if (location.hash === "#signup") show("signup-page");
+
+  function show(id) {
+    document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+    document.getElementById(id).classList.add("active");
+  }
+
+  function togglePass(id) {
+    const el = document.getElementById(id);
+    el.type = el.type === "password" ? "text" : "password";
+  }
+
+  let selectedRole = "";
+  function selectRole(role) {
+    selectedRole = role;
+    document.getElementById("role-buyer").classList.toggle("selected", role === "buyer");
+    document.getElementById("role-seller").classList.toggle("selected", role === "seller");
+    document.getElementById("su-role").value = role;
+  }
+
+  function checkStrength(val) {
+    let score = 0;
+    if (val.length >= 8) score++;
+    if (/[A-Z]/.test(val)) score++;
+    if (/[0-9]/.test(val)) score++;
+    if (/[^A-Za-z0-9]/.test(val)) score++;
+    const cls = ["","s1","s2","s3","s4"];
+    for (let i = 1; i <= 4; i++) {
+      document.getElementById("seg"+i).className = "strength-seg" + (i <= score ? " " + cls[score] : "");
+    }
+  }
+
+  async function handleLogin() {
+    const email = document.getElementById("login-email").value.trim();
+    const password = document.getElementById("login-pass").value;
+    if (!email || !password) { showToast("Please fill in all fields.", "error"); return; }
+
+    const btn = document.getElementById("login-btn");
+    btn.disabled = true; btn.textContent = "Signing in…";
+
+    try {
+      const res = await fetch("http://localhost:5000/api/users/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.msg || "Login failed.", "error"); return; }
+
+      // Decode user info from token
+      const decoded = decodeToken(data.token);
+      localStorage.setItem("bh_token", data.token);
+      localStorage.setItem("bh_user", JSON.stringify({ name: decoded?.name || email.split("@")[0], role: decoded?.role }));
+
+      showToast("Welcome back!", "success");
+      setTimeout(() => window.location.href = "index.html", 800);
+    } catch (e) {
+      showToast("Could not reach server.", "error");
+    } finally {
+      btn.disabled = false; btn.textContent = "Sign in to BidHive";
+    }
+  }
+
+  async function handleSignup() {
+    const name     = document.getElementById("su-name").value.trim();
+    const email    = document.getElementById("su-email").value.trim();
+    const password = document.getElementById("su-pass").value;
+    const role     = document.getElementById("su-role").value;
+
+    if (!name || !email || !password || !role) { showToast("Please complete all fields and select a role.", "error"); return; }
+    if (password.length < 8) { showToast("Password must be at least 8 characters.", "error"); return; }
+
+    const btn = document.getElementById("signup-btn");
+    btn.disabled = true; btn.textContent = "Creating account…";
+
+    try {
+      const res = await fetch("http://localhost:5000/api/users/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password, role })
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.msg || "Registration failed.", "error"); return; }
+
+      const decoded = decodeToken(data.token);
+      localStorage.setItem("bh_token", data.token);
+      localStorage.setItem("bh_user", JSON.stringify({ name, role: decoded?.role || role }));
+
+      showToast("Account created! Welcome 🎉", "success");
+      setTimeout(() => window.location.href = "index.html", 800);
+    } catch (e) {
+      showToast("Could not reach server.", "error");
+    } finally {
+      btn.disabled = false; btn.textContent = "Create my account";
+    }
+  }
+</script>
+</body>
+</html>

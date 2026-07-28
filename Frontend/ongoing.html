@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Auction browser: shows live auctions and category filtering. -->
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BidHive – Ongoing Auctions</title>
+<link rel="stylesheet" href="shared.css"/>
+<style>
+  .page-hero { position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:48px 5% 0; }
+  .page-hero h1 { font-family:var(--font-display);font-size:clamp(28px,4vw,42px);color:var(--text);display:flex;align-items:center;gap:14px;margin-bottom:6px; }
+  .page-hero p { font-size:14px;color:var(--text-muted);margin-bottom:2rem; }
+  .filters { display:flex;gap:10px;flex-wrap:wrap;margin-bottom:2rem; }
+  .filter-btn { padding:6px 16px;background:var(--surface);border:1px solid var(--border);border-radius:20px;color:var(--text-muted);font-family:var(--font-body);font-size:13px;cursor:pointer;transition:all 0.15s; }
+  .filter-btn:hover,.filter-btn.active { background:var(--accent-dim);border-color:rgba(245,166,35,0.35);color:var(--accent); }
+  .count-badge { font-size:13px;color:var(--text-dim);margin-bottom:1.5rem; }
+  .count-badge span { color:var(--text-muted);font-weight:500; }
+</style>
+</head>
+<body>
+<div class="bg-glow"></div>
+<nav id="main-nav"></nav>
+
+<div class="page-hero">
+  <h1>
+    <span class="nav-dot dot-green pulse" style="width:12px;height:12px;flex-shrink:0;"></span>
+    Ongoing auctions
+  </h1>
+  <p>Real-time live auctions — place your bid before time runs out.</p>
+  <div class="filters" id="filters"></div>
+</div>
+
+<div class="page-wrap">
+  <p class="count-badge" id="count-label"></p>
+  <div class="auction-grid" id="auction-grid"></div>
+</div>
+
+<script src="shared.js"></script>
+<script>
+  renderNav("ongoing");
+
+  const EMOJI_MAP = { Watches:"⌚", Art:"🎨", Electronics:"💻", Jewellery:"💎", Antiques:"🏺", Music:"🎸", Photography:"📷", Furniture:"🪑", Books:"📚", Fashion:"👗", Sports:"⚽", Vehicles:"🚗" };
+
+  let allAuctions = [];
+  let activeFilter = "All";
+
+  function skeletons(n=6) {
+    return Array(n).fill(0).map(()=>`
+      <div class="skeleton">
+        <div class="card-thumb" style="background:var(--surface2);"></div>
+        <div class="card-body">
+          <div class="skel-block" style="width:55px;height:9px;margin-bottom:8px;"></div>
+          <div class="skel-block" style="width:90%;height:13px;margin-bottom:5px;"></div>
+          <div class="skel-block" style="width:65%;height:13px;margin-bottom:14px;"></div>
+          <div style="display:flex;justify-content:space-between;">
+            <div class="skel-block" style="width:80px;height:18px;"></div>
+            <div class="skel-block" style="width:50px;height:18px;"></div>
+          </div>
+        </div>
+        <div class="card-footer" style="border-top:1px solid var(--border);">
+          <div class="skel-block" style="width:90px;height:11px;"></div>
+        </div>
+      </div>`).join("");
+  }
+
+  function renderCard(a) {
+    const bidVal = a.current_highest_bid > 0 ? formatINR(a.current_highest_bid) : "No bids yet";
+    const emoji  = EMOJI_MAP[a.category] || "🏷️";
+    return `
+      <a class="auction-card" href="auction-detail.html?id=${a._id}">
+        <div class="card-thumb">
+          ${a.image_url ? `<img src="${a.image_url}" alt="${a.item_name}" loading="lazy"/>` : emoji}
+          <span class="card-badge"><span class="pill pill-green" style="font-size:10px;"><span class="nav-dot dot-green pulse" style="width:6px;height:6px;"></span>Live</span></span>
+        </div>
+        <div class="card-body">
+          <div class="card-category">${a.category || "General"}</div>
+          <div class="card-title">${a.item_name}</div>
+          <div class="card-meta">
+            <div><div class="meta-label">Current bid</div><div class="meta-value accent">${bidVal}</div></div>
+          </div>
+        </div>
+        <div class="card-footer">
+          <span class="timer">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            ${timeLeft(a.end_time)}
+          </span>
+          <span class="bids-count">Ends ${formatDate(a.end_time)}</span>
+        </div>
+      </a>`;
+  }
+
+  function renderFilters(categories) {
+    const fil = document.getElementById("filters");
+    ["All", ...categories].forEach(cat => {
+      const btn = document.createElement("button");
+      btn.className = "filter-btn" + (cat === "All" ? " active" : "");
+      btn.textContent = cat;
+      btn.onclick = () => {
+        activeFilter = cat;
+        document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        applyFilter();
+      };
+      fil.appendChild(btn);
+    });
+  }
+
+  function applyFilter() {
+    const filtered = activeFilter === "All" ? allAuctions : allAuctions.filter(a => a.category === activeFilter);
+    const grid = document.getElementById("auction-grid");
+    document.getElementById("count-label").innerHTML = `Showing <span>${filtered.length}</span> live auction${filtered.length !== 1 ? "s" : ""}`;
+    if (!filtered.length) {
+      grid.innerHTML = `<div class="empty-state"><p>No auctions in this category right now.</p></div>`;
+      return;
+    }
+    grid.innerHTML = filtered.map(renderCard).join("");
+  }
+
+  async function load() {
+    document.getElementById("auction-grid").innerHTML = skeletons(6);
+    try {
+      const all = await apiFetch("/api/auctions");
+      const now = new Date();
+      allAuctions = all.filter(a => a.status === "active" && new Date(a.start_time) <= now && new Date(a.end_time) >= now);
+      const categories = [...new Set(allAuctions.map(a => a.category).filter(Boolean))];
+      renderFilters(categories);
+      applyFilter();
+    } catch(e) {
+      document.getElementById("auction-grid").innerHTML = `<div class="error-state">Failed to load. Is your server running?</div>`;
+    }
+  }
+
+  load();
+</script>
+</body>
+</html>

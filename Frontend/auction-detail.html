@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Auction detail page: displays one listing, its bid history, and live bid updates. -->
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BidHive – Auction Detail</title>
+<link rel="stylesheet" href="shared.css"/>
+<style>
+  .detail-wrap { position:relative;z-index:1;max-width:1000px;margin:0 auto;padding:40px 5% 80px; }
+  .back-link { display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--text-muted);text-decoration:none;margin-bottom:2rem;transition:color 0.15s; }
+  .back-link:hover { color:var(--text); }
+
+  .detail-grid { display:grid;grid-template-columns:1fr 380px;gap:28px;align-items:start; }
+
+  .detail-main { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden; }
+  .detail-thumb { height:280px;display:flex;align-items:center;justify-content:center;font-size:80px;background:var(--surface2); }
+  .detail-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+  .detail-body { padding:1.5rem; }
+  .detail-category { font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px; }
+  .detail-title { font-family:var(--font-display);font-size:26px;color:var(--text);line-height:1.2;margin-bottom:1rem; }
+  .detail-desc { font-size:14px;color:var(--text-muted);line-height:1.7;margin-bottom:1.5rem; }
+  .detail-meta { display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1.5rem; }
+  .meta-card { background:var(--surface2);border-radius:var(--radius-sm);padding:0.9rem 1rem; }
+  .meta-card .label { font-size:11px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px; }
+  .meta-card .value { font-size:15px;font-weight:600;color:var(--text); }
+  .meta-card .value.accent { color:var(--accent); }
+  .meta-card .value.blue { color:var(--blue); }
+  .meta-card .value.red { color:var(--red); }
+
+  .bid-panel { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;position:sticky;top:84px; }
+  .bid-panel-title { font-family:var(--font-display);font-size:20px;color:var(--text);margin-bottom:1.25rem; }
+
+  .current-bid-display { background:var(--accent-dim);border:1px solid rgba(245,166,35,0.2);border-radius:var(--radius-sm);padding:1rem 1.25rem;margin-bottom:1.25rem;text-align:center; }
+  .cbd-label { font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--accent);margin-bottom:4px; }
+  .cbd-value { font-family:var(--font-display);font-size:36px;color:var(--accent); }
+
+  .timer-display { display:flex;align-items:center;justify-content:center;gap:7px;font-size:13px;color:var(--text-muted);margin-bottom:1.25rem; }
+  .timer-display svg { width:14px;height:14px; }
+  .timer-display.urgent { color:var(--red); }
+
+  .bid-form { display:flex;flex-direction:column;gap:10px; }
+  .bid-hint { font-size:12px;color:var(--text-dim);margin-top:-4px; }
+  .login-prompt { text-align:center;padding:1rem;font-size:13px;color:var(--text-muted); }
+  .login-prompt a { color:var(--accent);text-decoration:none;font-weight:600; }
+
+  .bid-feed { margin-top:1.5rem; }
+  .bid-feed-title { font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-dim);margin-bottom:10px; }
+  .bid-item { display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px; }
+  .bid-item:last-child { border-bottom:none; }
+  .bid-item .amount { font-weight:600;color:var(--text); }
+  .bid-item .time { color:var(--text-dim); }
+  .bid-item.latest .amount { color:var(--accent); }
+
+  .status-banner { padding:10px 14px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;margin-bottom:1.25rem;text-align:center; }
+  .status-banner.closed { background:var(--red-dim);color:var(--red);border:1px solid rgba(224,90,90,0.2); }
+  .status-banner.upcoming { background:var(--blue-dim);color:var(--blue);border:1px solid rgba(74,158,255,0.2); }
+
+  @media(max-width:720px) { .detail-grid{grid-template-columns:1fr;} .bid-panel{position:static;} }
+</style>
+</head>
+<body>
+<div class="bg-glow"></div>
+<nav id="main-nav"></nav>
+
+<div class="detail-wrap">
+  <a href="javascript:history.back()" class="back-link">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+    Back
+  </a>
+  <div id="detail-content"><div style="text-align:center;padding:4rem;color:var(--text-muted);">Loading auction…</div></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.5/dist/socket.io.min.js"></script>
+<script src="shared.js"></script>
+<script>
+  renderNav();
+
+  const params   = new URLSearchParams(location.search);
+  const auctionId = params.get("id");
+  const EMOJI_MAP = { Watches:"⌚", Art:"🎨", Electronics:"💻", Jewellery:"💎", Antiques:"🏺", Music:"🎸", Photography:"📷", Furniture:"🪑", Books:"📚", Fashion:"👗", Sports:"⚽", Vehicles:"🚗" };
+
+  let socket;
+  let auctionData;
+  let bidFeed = [];
+
+  if (!auctionId) { document.getElementById("detail-content").innerHTML = `<div class="error-state">No auction ID provided.</div>`; }
+  else load();
+
+  async function load() {
+    try {
+      const all = await apiFetch("/api/auctions");
+      auctionData = all.find(a => a._id === auctionId);
+      if (!auctionData) { document.getElementById("detail-content").innerHTML = `<div class="error-state">Auction not found.</div>`; return; }
+      
+      const bids = await apiFetch("/api/bids/auction/" + auctionId);
+      bidFeed = bids.slice(0, 8); // populate local bidFeed state
+      
+      render();
+      connectSocket();
+    } catch(e) {
+      document.getElementById("detail-content").innerHTML = `<div class="error-state">Failed to load auction.</div>`;
+    }
+  }
+
+  function getPhase(a) {
+    const now = new Date();
+    if (a.status === "closed") return "closed";
+    if (new Date(a.start_time) > now) return "upcoming";
+    if (new Date(a.end_time) < now) return "closed";
+    return "ongoing";
+  }
+
+  function render() {
+    const a     = auctionData;
+    const phase = getPhase(a);
+    const user  = getUser() || (getToken() ? decodeToken(getToken()) : null);
+    const emoji = EMOJI_MAP[a.category] || "🏷️";
+    const currentBid = a.current_highest_bid > 0 ? formatINR(a.current_highest_bid) : "No bids yet";
+
+    const isOngoing  = phase === "ongoing";
+    const isUpcoming = phase === "upcoming";
+    const isClosed   = phase === "closed";
+
+    // Status pill
+    const statusPill = isOngoing
+      ? `<span class="pill pill-green"><span class="nav-dot dot-green pulse"></span> Live</span>`
+      : isUpcoming
+      ? `<span class="pill pill-blue">Upcoming</span>`
+      : `<span class="pill pill-red">Ended</span>`;
+
+    // Timer
+    const timerText = isOngoing ? timeLeft(a.end_time) : isUpcoming ? "Starts " + formatDate(a.start_time) : "Ended " + formatDate(a.end_time);
+    const timerClass = isOngoing ? "" : isClosed ? "urgent" : "";
+
+    // Status banner (non-ongoing)
+    const banner = isClosed
+      ? `<div class="status-banner closed">This auction has ended. ${a.current_highest_bid > 0 ? "Final bid: " + formatINR(a.current_highest_bid) : "No bids were placed."}</div>`
+      : isUpcoming
+      ? `<div class="status-banner upcoming">This auction hasn't started yet. Check back on ${formatDate(a.start_time)}.</div>`
+      : "";
+
+    // Bid input section
+    let bidSection = "";
+    if (isOngoing || isUpcoming) {
+      if (!user) {
+        bidSection = `<div class="login-prompt">Want to bid? <a href="auction-auth.html">Sign in</a> or <a href="auction-auth.html">create an account</a>.</div>`;
+      } else if (user.role === "seller") {
+        bidSection = `<div class="login-prompt" style="color:var(--text-dim);">Sellers cannot place bids.</div>`;
+      } else {
+        const minBid = a.current_highest_bid > 0 ? a.current_highest_bid + 1 : 1;
+        bidSection = `
+          <div class="bid-form">
+            <label class="form-label">Your bid (min ${formatINR(minBid)})</label>
+            <input type="number" id="bid-input" class="form-input" min="${minBid}" placeholder="${minBid}" />
+            <p class="bid-hint">Must be higher than current highest bid</p>
+            <button class="btn-primary" id="bid-btn" onclick="placeBid()">Place bid</button>
+          </div>`;
+      }
+    } else if (isClosed && user && user.role !== "seller") {
+      // Check if current user is the winner
+      const userId = user.id || (getToken() ? decodeToken(getToken())?.id : null);
+      const winnerId = a.highest_bidder_id ? (a.highest_bidder_id._id || a.highest_bidder_id).toString() : null;
+      if (winnerId && userId && winnerId === userId) {
+        bidSection = `<div id="payment-cta"></div>`;
+      }
+    }
+
+    document.getElementById("detail-content").innerHTML = `
+      <div class="detail-grid">
+        <div>
+          <div class="detail-main">
+            <div class="detail-thumb">${a.image_url ? `<img src="${a.image_url}" alt="${a.item_name}" loading="lazy"/>` : emoji}</div>
+            <div class="detail-body">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                <span class="detail-category">${a.category || "General"}</span>
+                ${statusPill}
+              </div>
+              <h1 class="detail-title">${a.item_name}</h1>
+              <p class="detail-desc">${a.description || "No description provided."}</p>
+              <div class="detail-meta">
+                <div class="meta-card">
+                  <div class="label">Start time</div>
+                  <div class="value blue">${formatDate(a.start_time)}</div>
+                </div>
+                <div class="meta-card">
+                  <div class="label">End time</div>
+                  <div class="value ${isClosed ? 'red' : ''}">${formatDate(a.end_time)}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="bid-panel">
+            <p class="bid-panel-title">Bidding</p>
+            ${banner}
+            <div class="current-bid-display">
+              <div class="cbd-label">${isClosed ? "Final bid" : "Current highest bid"}</div>
+              <div class="cbd-value" id="live-bid">${currentBid}</div>
+            </div>
+            <div class="timer-display ${timerClass}" id="live-timer">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              ${timerText}
+            </div>
+            ${bidSection}
+            <div class="bid-feed">
+              <div class="bid-feed-title">Recent bids</div>
+              <div id="bid-feed-list">
+                ${bidFeed.length > 0 
+                  ? bidFeed.map((b, i) => `
+                    <div class="bid-item ${i === 0 ? 'latest' : ''}">
+                      <span class="amount">${formatINR(b.bid_amount)}</span>
+                      <span class="time">${new Date(b.timestamp).toLocaleTimeString("en-IN", {hour:"2-digit",minute:"2-digit"})}</span>
+                    </div>`).join("")
+                  : `<div style="font-size:13px;color:var(--text-dim);padding:8px 0;">No bids yet.</div>`}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+
+    // Tick timer every 30s if ongoing
+    if (isOngoing) setInterval(tickTimer, 30000);
+
+    // Load payment CTA for winner on closed auctions
+    if (isClosed && document.getElementById("payment-cta")) {
+      loadPaymentCTA(a._id, a.current_highest_bid);
+    }
+  }
+
+  async function loadPaymentCTA(auctionId, amount) {
+    const el = document.getElementById("payment-cta");
+    if (!el) return;
+    try {
+      const payment = await apiFetch("/api/payments/" + auctionId);
+      if (payment && payment.status === "paid") {
+        el.innerHTML = `
+          <div style="background:var(--green-dim);border:1px solid rgba(76,175,130,0.25);border-radius:var(--radius-sm);padding:14px 16px;text-align:center;">
+            <div style="font-size:20px;margin-bottom:4px;">✅</div>
+            <div style="font-size:13px;font-weight:600;color:var(--green);margin-bottom:2px;">Payment complete</div>
+            <div style="font-size:11px;color:var(--text-dim);">Txn: ${payment.txn_id}</div>
+          </div>`;
+      } else {
+        renderPayBtn(el, auctionId, amount);
+      }
+    } catch(e) {
+      // No payment yet — show pay button
+      renderPayBtn(el, auctionId, amount);
+    }
+  }
+
+  function renderPayBtn(el, auctionId, amount) {
+    el.innerHTML = `
+      <div style="background:var(--accent-dim);border:1px solid rgba(245,166,35,0.2);border-radius:var(--radius-sm);padding:14px 16px;text-align:center;">
+        <div style="font-size:13px;color:var(--accent);font-weight:600;margin-bottom:10px;">🏆 You won this auction!</div>
+        <a href="payment.html?id=${auctionId}" style="display:inline-block;padding:10px 28px;background:var(--accent);color:#0d0f14;font-weight:700;font-size:14px;border-radius:var(--radius-sm);text-decoration:none;transition:background 0.15s;"
+           onmouseover="this.style.background='var(--accent-hover)'" onmouseout="this.style.background='var(--accent)'">
+          💳 Pay ${formatINR(amount)} now
+        </a>
+      </div>`;
+  }
+
+  function tickTimer() {
+    const el = document.getElementById("live-timer");
+    if (el && auctionData) el.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>${timeLeft(auctionData.end_time)}`;
+  }
+
+  function pushBidFeed(bid) {
+    if (bid._id && bidFeed.some(b => b._id === bid._id)) return;
+    bidFeed.unshift(bid);
+    if (bidFeed.length > 8) bidFeed.pop();
+    const el = document.getElementById("bid-feed-list");
+    if (!el) return;
+    el.innerHTML = bidFeed.map((b, i) => `
+      <div class="bid-item ${i === 0 ? 'latest' : ''}">
+        <span class="amount">${formatINR(b.bid_amount)}</span>
+        <span class="time">${new Date(b.timestamp).toLocaleTimeString("en-IN", {hour:"2-digit",minute:"2-digit"})}</span>
+      </div>`).join("");
+  }
+
+  function connectSocket() {
+    socket = io("http://localhost:5000");
+    socket.emit("joinAuction", auctionId);
+    socket.on("newBid", (data) => {
+      // Update live bid display
+      auctionData.current_highest_bid = data.bid_amount;
+      const liveEl = document.getElementById("live-bid");
+      if (liveEl) {
+        liveEl.textContent = formatINR(data.bid_amount);
+        liveEl.style.transform = "scale(1.08)";
+        setTimeout(() => liveEl.style.transform = "scale(1)", 300);
+      }
+      pushBidFeed(data);
+      // Update min bid
+      const inp = document.getElementById("bid-input");
+      if (inp) { inp.min = data.bid_amount + 1; inp.placeholder = data.bid_amount + 1; }
+      showToast("New bid: " + formatINR(data.bid_amount), "success");
+    });
+  }
+
+  async function placeBid() {
+    const input = document.getElementById("bid-input");
+    const bid_amount = Number(input.value);
+    if (!bid_amount || bid_amount <= 0) { showToast("Enter a valid bid amount.", "error"); return; }
+    if (bid_amount <= auctionData.current_highest_bid) {
+      showToast("Bid must be higher than " + formatINR(auctionData.current_highest_bid), "error"); return;
+    }
+
+    const btn = document.getElementById("bid-btn");
+    btn.disabled = true; btn.textContent = "Placing bid…";
+
+    try {
+      const data = await apiFetch("/api/bids", {
+        method: "POST",
+        body: JSON.stringify({ auction_id: auctionId, bid_amount })
+      });
+      // Optionally update the UI immediately as a fallback for slow websockets
+      if (auctionData.current_highest_bid < bid_amount) {
+        auctionData.current_highest_bid = bid_amount;
+        const liveEl = document.getElementById("live-bid");
+        if (liveEl) {
+          liveEl.textContent = formatINR(bid_amount);
+          liveEl.style.transform = "scale(1.08)";
+          setTimeout(() => liveEl.style.transform = "scale(1)", 300);
+        }
+        if (data.bid) pushBidFeed(data.bid);
+        input.min = bid_amount + 1;
+        input.placeholder = bid_amount + 1;
+      }
+
+      showToast("Bid placed: " + formatINR(bid_amount) + " ✓", "success");
+      input.value = "";
+    } catch(e) {
+      showToast(e.message || "Failed to place bid.", "error");
+    } finally {
+      btn.disabled = false; btn.textContent = "Place bid";
+    }
+  }
+</script>
+</body>
+</html>
