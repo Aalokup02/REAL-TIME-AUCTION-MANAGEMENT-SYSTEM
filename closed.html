@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Auction browser: shows completed auctions and their final bids. -->
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BidHive – Closed Auctions</title>
+<link rel="stylesheet" href="shared.css"/>
+<style>
+  .page-hero { position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:48px 5% 0; }
+  .page-hero h1 { font-family:var(--font-display);font-size:clamp(28px,4vw,42px);color:var(--text);display:flex;align-items:center;gap:14px;margin-bottom:6px; }
+  .page-hero p { font-size:14px;color:var(--text-muted);margin-bottom:2rem; }
+  .count-badge { font-size:13px;color:var(--text-dim);margin-bottom:1.5rem; }
+  .count-badge span { color:var(--text-muted);font-weight:500; }
+  .closed-card { opacity:0.65; }
+  .closed-card .card-thumb { filter:grayscale(0.5); }
+  .closed-card:hover { opacity:0.85; }
+</style>
+</head>
+<body>
+<div class="bg-glow"></div>
+<nav id="main-nav"></nav>
+
+<div class="page-hero">
+  <h1>
+    <span class="nav-dot dot-red" style="width:12px;height:12px;flex-shrink:0;"></span>
+    Closed auctions
+  </h1>
+  <p>These auctions have ended. Browse past results and final prices.</p>
+</div>
+
+<div class="page-wrap">
+  <p class="count-badge" id="count-label"></p>
+  <div class="auction-grid" id="auction-grid"></div>
+</div>
+
+<script src="shared.js"></script>
+<script>
+  renderNav("closed");
+
+  const EMOJI_MAP = { Watches:"⌚", Art:"🎨", Electronics:"💻", Jewellery:"💎", Antiques:"🏺", Music:"🎸", Photography:"📷", Furniture:"🪑", Books:"📚", Fashion:"👗", Sports:"⚽", Vehicles:"🚗" };
+
+  function skeletons(n=6) {
+    return Array(n).fill(0).map(()=>`
+      <div class="skeleton" style="opacity:0.6;">
+        <div class="card-thumb" style="background:var(--surface2);filter:grayscale(0.5);"></div>
+        <div class="card-body">
+          <div class="skel-block" style="width:55px;height:9px;margin-bottom:8px;"></div>
+          <div class="skel-block" style="width:90%;height:13px;margin-bottom:5px;"></div>
+          <div class="skel-block" style="width:65%;height:13px;margin-bottom:14px;"></div>
+          <div class="skel-block" style="width:80px;height:18px;"></div>
+        </div>
+        <div class="card-footer" style="border-top:1px solid var(--border);">
+          <div class="skel-block" style="width:100px;height:11px;"></div>
+        </div>
+      </div>`).join("");
+  }
+
+  function renderCard(a) {
+    const emoji   = EMOJI_MAP[a.category] || "🏷️";
+    const finalBid = a.current_highest_bid > 0 ? formatINR(a.current_highest_bid) : "No bids";
+    return `
+      <a class="auction-card closed-card" href="auction-detail.html?id=${a._id}">
+        <div class="card-thumb" style="filter:grayscale(0.5);">
+          ${a.image_url ? `<img src="${a.image_url}" alt="${a.item_name}" loading="lazy"/>` : emoji}
+          <span class="card-badge"><span class="pill pill-red" style="font-size:10px;">Ended</span></span>
+        </div>
+        <div class="card-body">
+          <div class="card-category">${a.category || "General"}</div>
+          <div class="card-title">${a.item_name}</div>
+          <div class="card-meta">
+            <div><div class="meta-label">Final bid</div><div class="meta-value">${finalBid}</div></div>
+          </div>
+        </div>
+        <div class="card-footer">
+          <span class="timer" style="color:var(--red);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            Ended ${formatDate(a.end_time)}
+          </span>
+          <span class="bids-count">${a.current_highest_bid > 0 ? "Winner notified" : "No winner"}</span>
+        </div>
+      </a>`;
+  }
+
+  async function load() {
+    document.getElementById("auction-grid").innerHTML = skeletons(6);
+    try {
+      const all = await apiFetch("/api/auctions");
+      const now = new Date();
+      const closed = all.filter(a => a.status === "closed" || new Date(a.end_time) < now)
+                        .sort((a,b) => new Date(b.end_time) - new Date(a.end_time));
+      document.getElementById("count-label").innerHTML = `<span>${closed.length}</span> closed auction${closed.length !== 1 ? "s" : ""}`;
+      if (!closed.length) {
+        document.getElementById("auction-grid").innerHTML = `<div class="empty-state"><p>No closed auctions yet.</p></div>`;
+        return;
+      }
+      document.getElementById("auction-grid").innerHTML = closed.map(renderCard).join("");
+    } catch(e) {
+      document.getElementById("auction-grid").innerHTML = `<div class="error-state">Failed to load. Is your server running?</div>`;
+    }
+  }
+
+  load();
+</script>
+</body>
+</html>

@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Payment page: collects the selected payment method for an auction winner. -->
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BidHive – Complete Payment</title>
+<link rel="stylesheet" href="shared.css"/>
+<style>
+  .pay-wrap { position:relative;z-index:1;max-width:560px;margin:0 auto;padding:40px 5% 80px; }
+
+  .back-link { display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--text-muted);text-decoration:none;margin-bottom:2rem;transition:color 0.15s; }
+  .back-link:hover { color:var(--text); }
+
+  .pay-header { margin-bottom:1.75rem; }
+  .pay-header h1 { font-family:var(--font-display);font-size:30px;color:var(--text);margin-bottom:5px; }
+  .pay-header p  { font-size:14px;color:var(--text-muted); }
+
+  /* ── Order summary card ── */
+  .summary-card { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem 1.5rem;margin-bottom:1.5rem; }
+  .summary-row  { display:flex;align-items:center;justify-content:space-between;gap:12px; }
+  .summary-item { display:flex;align-items:center;gap:14px; }
+  .summary-emoji{ font-size:36px;width:56px;height:56px;background:var(--surface2);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;flex-shrink:0; }
+  .summary-name { font-size:15px;font-weight:600;color:var(--text);line-height:1.3; }
+  .summary-cat  { font-size:11px;color:var(--text-dim);margin-top:2px;text-transform:uppercase;letter-spacing:0.05em; }
+  .summary-price{ text-align:right;flex-shrink:0; }
+  .summary-price .label { font-size:11px;color:var(--text-dim);margin-bottom:3px;text-transform:uppercase;letter-spacing:0.05em; }
+  .summary-price .amount{ font-family:var(--font-display);font-size:26px;color:var(--accent); }
+
+  /* ── Method selector ── */
+  .method-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1.25rem; }
+  .method-card {
+    background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);
+    padding:14px 10px 12px;cursor:pointer;text-align:center;
+    transition:border-color 0.2s,background 0.2s;
+  }
+  .method-card:hover { border-color:rgba(245,166,35,0.35); }
+  .method-card.active { border-color:var(--accent);background:var(--accent-dim);box-shadow:0 0 0 3px rgba(245,166,35,0.08); }
+  .method-icon  { font-size:22px;display:block;margin-bottom:6px; }
+  .method-label { font-size:12px;font-weight:600;color:var(--text); }
+
+  /* ── Form card ── */
+  .form-card { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;margin-bottom:1.25rem; }
+
+  .card-row { display:grid;grid-template-columns:1fr 1fr;gap:14px; }
+
+  .input-icon-wrap { position:relative; }
+  .input-icon-wrap .form-input { padding-left:40px; }
+  .input-icon { position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:16px;pointer-events:none; }
+
+  .secure-badge { display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--text-dim);margin-top:6px; }
+  .secure-badge svg { width:12px;height:12px;color:var(--green); }
+
+  /* ── Pay button ── */
+  .btn-pay {
+    width:100%;height:52px;background:var(--accent);border:none;border-radius:var(--radius-sm);
+    color:#0d0f14;font-family:var(--font-display);font-size:17px;cursor:pointer;
+    transition:background 0.15s,transform 0.1s;display:flex;align-items:center;justify-content:center;gap:8px;
+  }
+  .btn-pay:hover { background:var(--accent-hover); }
+  .btn-pay:active { transform:scale(0.98); }
+  .btn-pay:disabled { opacity:0.5;cursor:not-allowed;transform:none; }
+
+  /* ── Already paid ── */
+  .paid-banner {
+    background:var(--green-dim);border:1px solid rgba(76,175,130,0.25);border-radius:var(--radius);
+    padding:2rem 1.5rem;text-align:center;
+  }
+  .paid-banner .check { font-size:42px;margin-bottom:0.75rem; }
+  .paid-banner h2 { font-family:var(--font-display);font-size:24px;color:var(--green);margin-bottom:6px; }
+  .paid-banner p  { font-size:13px;color:var(--text-muted);margin-bottom:4px; }
+  .paid-banner .txn { font-size:12px;color:var(--text-dim);font-family:monospace; }
+
+  /* ── UPI field ── */
+  #upi-section, #card-section, #nb-section { display:none; }
+  #upi-section.show, #card-section.show, #nb-section.show { display:block; }
+
+  .nb-grid { display:grid;grid-template-columns:1fr 1fr;gap:10px; }
+  .nb-option { background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 10px;cursor:pointer;display:flex;align-items:center;gap:10px;transition:border-color 0.2s; }
+  .nb-option:hover,.nb-option.active { border-color:var(--accent); }
+  .nb-logo { width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0; }
+  .nb-name { font-size:13px;color:var(--text);font-weight:500; }
+</style>
+</head>
+<body>
+<div class="bg-glow"></div>
+<nav id="main-nav"></nav>
+
+<div class="pay-wrap">
+  <a id="back-btn" href="javascript:history.back()" class="back-link">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+    Back to auction
+  </a>
+
+  <div class="pay-header">
+    <h1>Complete payment</h1>
+    <p>You won this auction! Secure your item by completing payment below.</p>
+  </div>
+
+  <div id="pay-content">
+    <div style="text-align:center;padding:4rem;color:var(--text-muted);">Loading auction…</div>
+  </div>
+</div>
+
+<script src="shared.js"></script>
+<script>
+  renderNav();
+
+  const params    = new URLSearchParams(location.search);
+  const auctionId = params.get("id");
+
+  const EMOJI_MAP = { Watches:"⌚",Art:"🎨",Electronics:"💻",Jewellery:"💎",Antiques:"🏺",Music:"🎸",Photography:"📷",Furniture:"🪑",Books:"📚",Fashion:"👗",Sports:"⚽",Vehicles:"🚗" };
+
+  // Guard
+  if (!getToken()) { window.location.href = "auction-auth.html"; }
+  if (!auctionId)  { document.getElementById("pay-content").innerHTML = `<div class="error-state">No auction ID provided.</div>`; }
+  else init();
+
+  async function init() {
+    try {
+      // Load auction + payment status in parallel
+      const [allAuctions, paymentRes] = await Promise.allSettled([
+        apiFetch("/api/auctions"),
+        apiFetch("/api/payments/" + auctionId)
+      ]);
+
+      const auction = allAuctions.status === "fulfilled"
+        ? allAuctions.value.find(a => a._id === auctionId)
+        : null;
+
+      if (!auction) {
+        document.getElementById("pay-content").innerHTML = `<div class="error-state">Auction not found.</div>`;
+        return;
+      }
+
+      const payment = paymentRes.status === "fulfilled" ? paymentRes.value : null;
+
+      if (payment && payment.status === "paid") {
+        renderPaid(auction, payment);
+      } else {
+        renderForm(auction);
+      }
+    } catch(e) {
+      document.getElementById("pay-content").innerHTML = `<div class="error-state">Failed to load. Is your server running?</div>`;
+    }
+  }
+
+  function renderPaid(auction, payment) {
+    const emoji = EMOJI_MAP[auction.category] || "🏷️";
+    document.getElementById("pay-content").innerHTML = `
+      <div class="summary-card">
+        <div class="summary-row">
+          <div class="summary-item">
+            <div class="summary-emoji">${emoji}</div>
+            <div>
+              <div class="summary-name">${auction.item_name}</div>
+              <div class="summary-cat">${auction.category || "General"}</div>
+            </div>
+          </div>
+          <div class="summary-price">
+            <div class="label">Amount paid</div>
+            <div class="amount">${formatINR(payment.amount)}</div>
+          </div>
+        </div>
+      </div>
+      <div class="paid-banner">
+        <div class="check">✅</div>
+        <h2>Payment complete!</h2>
+        <p>Your item has been secured. The seller will be in touch shortly.</p>
+        <p class="txn">Transaction ID: ${payment.txn_id}</p>
+        <p style="margin-top:6px;font-size:11px;color:var(--text-dim);">Paid on ${new Date(payment.paid_at).toLocaleString("en-IN")}</p>
+      </div>`;
+  }
+
+  function renderForm(auction) {
+    const emoji   = EMOJI_MAP[auction.category] || "🏷️";
+    const amount  = formatINR(auction.current_highest_bid);
+
+    document.getElementById("pay-content").innerHTML = `
+      <!-- Order summary -->
+      <div class="summary-card">
+        <div class="summary-row">
+          <div class="summary-item">
+            <div class="summary-emoji">${emoji}</div>
+            <div>
+              <div class="summary-name">${auction.item_name}</div>
+              <div class="summary-cat">${auction.category || "General"}</div>
+            </div>
+          </div>
+          <div class="summary-price">
+            <div class="label">Amount due</div>
+            <div class="amount">${amount}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Payment method -->
+      <div class="form-card">
+        <p class="form-label" style="margin-bottom:1rem;">Choose payment method</p>
+        <div class="method-grid">
+          <div class="method-card" id="m-card"     onclick="selectMethod('card')">
+            <span class="method-icon">💳</span>
+            <div class="method-label">Card</div>
+          </div>
+          <div class="method-card" id="m-upi"      onclick="selectMethod('upi')">
+            <span class="method-icon">📱</span>
+            <div class="method-label">UPI</div>
+          </div>
+          <div class="method-card" id="m-netbanking" onclick="selectMethod('netbanking')">
+            <span class="method-icon">🏦</span>
+            <div class="method-label">Net Banking</div>
+          </div>
+        </div>
+
+        <!-- Card fields -->
+        <div id="card-section">
+          <div class="form-field">
+            <label class="form-label">Cardholder name</label>
+            <input type="text" id="card-name" class="form-input" placeholder="Name on card"/>
+          </div>
+          <div class="form-field">
+            <label class="form-label">Card number</label>
+            <div class="input-icon-wrap">
+              <span class="input-icon">💳</span>
+              <input type="text" id="card-number" class="form-input" placeholder="•••• •••• •••• ••••" maxlength="19" oninput="formatCard(this)"/>
+            </div>
+          </div>
+          <div class="card-row">
+            <div class="form-field">
+              <label class="form-label">Expiry</label>
+              <input type="text" id="card-expiry" class="form-input" placeholder="MM / YY" maxlength="7" oninput="formatExpiry(this)"/>
+            </div>
+            <div class="form-field">
+              <label class="form-label">CVV</label>
+              <input type="password" id="card-cvv" class="form-input" placeholder="•••" maxlength="4"/>
+            </div>
+          </div>
+          <div class="secure-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            256-bit SSL encrypted. Card details are never stored.
+          </div>
+        </div>
+
+        <!-- UPI fields -->
+        <div id="upi-section">
+          <div class="form-field">
+            <label class="form-label">UPI ID</label>
+            <div class="input-icon-wrap">
+              <span class="input-icon">@</span>
+              <input type="text" id="upi-id" class="form-input" placeholder="yourname@upi"/>
+            </div>
+          </div>
+          <div class="secure-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Payments secured via UPI infrastructure.
+          </div>
+        </div>
+
+        <!-- Net banking -->
+        <div id="nb-section">
+          <p class="form-label" style="margin-bottom:10px;">Select your bank</p>
+          <div class="nb-grid">
+            <div class="nb-option" id="nb-sbi"  onclick="selectBank('sbi')">
+              <div class="nb-logo" style="background:#1a3c6e;color:#fff;">SBI</div>
+              <span class="nb-name">State Bank</span>
+            </div>
+            <div class="nb-option" id="nb-hdfc" onclick="selectBank('hdfc')">
+              <div class="nb-logo" style="background:#004c8f;color:#fff;">HDFC</div>
+              <span class="nb-name">HDFC Bank</span>
+            </div>
+            <div class="nb-option" id="nb-icici" onclick="selectBank('icici')">
+              <div class="nb-logo" style="background:#f26522;color:#fff;">ICICI</div>
+              <span class="nb-name">ICICI Bank</span>
+            </div>
+            <div class="nb-option" id="nb-axis" onclick="selectBank('axis')">
+              <div class="nb-logo" style="background:#97144d;color:#fff;">AXIS</div>
+              <span class="nb-name">Axis Bank</span>
+            </div>
+          </div>
+          <input type="hidden" id="nb-selected" value=""/>
+          <div class="secure-badge" style="margin-top:14px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Redirects to your bank's secure portal.
+          </div>
+        </div>
+      </div>
+
+      <!-- Pay button -->
+      <button class="btn-pay" id="pay-btn" onclick="submitPayment('${auction._id}', ${auction.current_highest_bid})" disabled>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+        Pay ${amount}
+      </button>
+      <p style="text-align:center;font-size:12px;color:var(--text-dim);margin-top:10px;">
+        By continuing, you agree to BidHive's payment terms.
+      </p>`;
+  }
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  let selectedMethod = "";
+  let selectedBank   = "";
+
+  function selectMethod(method) {
+    selectedMethod = method;
+    ["card","upi","netbanking"].forEach(m => {
+      document.getElementById("m-" + m)?.classList.remove("active");
+    });
+    document.getElementById("m-" + method)?.classList.add("active");
+
+    document.getElementById("card-section").className = method === "card"       ? "card-section show" : "card-section";
+    document.getElementById("upi-section").className  = method === "upi"        ? "upi-section show"  : "upi-section";
+    document.getElementById("nb-section").className   = method === "netbanking" ? "nb-section show"   : "nb-section";
+
+    document.getElementById("pay-btn").disabled = false;
+  }
+
+  function selectBank(bank) {
+    selectedBank = bank;
+    ["sbi","hdfc","icici","axis"].forEach(b => document.getElementById("nb-"+b)?.classList.remove("active"));
+    document.getElementById("nb-"+bank)?.classList.add("active");
+    document.getElementById("nb-selected").value = bank;
+  }
+
+  // ── Card formatting helpers ───────────────────────────────────────────────
+  function formatCard(el) {
+    let v = el.value.replace(/\D/g,"").substring(0,16);
+    el.value = v.match(/.{1,4}/g)?.join(" ") || v;
+  }
+  function formatExpiry(el) {
+    let v = el.value.replace(/\D/g,"").substring(0,4);
+    if (v.length >= 2) v = v.substring(0,2) + " / " + v.substring(2);
+    el.value = v;
+  }
+
+  // ── Submit ────────────────────────────────────────────────────────────────
+  async function submitPayment(auctionId, amount) {
+    if (!selectedMethod) { showToast("Please select a payment method.", "error"); return; }
+
+    let payload = { auction_id: auctionId, method: selectedMethod };
+
+    if (selectedMethod === "card") {
+      const cardNum = (document.getElementById("card-number")?.value || "").replace(/\s/g,"");
+      const name    = (document.getElementById("card-name")?.value   || "").trim();
+      const expiry  = (document.getElementById("card-expiry")?.value || "").trim();
+      const cvv     = (document.getElementById("card-cvv")?.value    || "").trim();
+      if (!name || cardNum.length < 16 || !expiry || !cvv) {
+        showToast("Please complete all card details.", "error"); return;
+      }
+      payload.card_last4 = cardNum.slice(-4);
+    }
+
+    if (selectedMethod === "upi") {
+      const upi = (document.getElementById("upi-id")?.value || "").trim();
+      if (!upi || !upi.includes("@")) {
+        showToast("Enter a valid UPI ID (e.g. name@upi).", "error"); return;
+      }
+      payload.upi_id = upi;
+    }
+
+    if (selectedMethod === "netbanking") {
+      if (!selectedBank) {
+        showToast("Please select a bank.", "error"); return;
+      }
+      // net banking doesn't need extra fields — bank name stored in upi_id field for reference
+      payload.upi_id = selectedBank;
+    }
+
+    const btn = document.getElementById("pay-btn");
+    btn.disabled = true; btn.textContent = "Processing payment…";
+
+    try {
+      const data = await apiFetch("/api/payments", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      showToast("Payment successful! 🎉", "success");
+      // Redirect to confirmation view
+      setTimeout(() => init(), 800);
+    } catch(e) {
+      showToast(e.message || "Payment failed. Please try again.", "error");
+      btn.disabled = false;
+      btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Pay ${formatINR(amount)}`;
+    }
+  }
+</script>
+</body>
+</html>
